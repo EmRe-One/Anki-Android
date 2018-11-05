@@ -18,7 +18,6 @@
 
 package com.ichi2.anki;
 
-import android.annotation.SuppressLint;
 import android.app.AlertDialog;
 import android.content.BroadcastReceiver;
 import android.content.Context;
@@ -30,11 +29,10 @@ import android.graphics.Typeface;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.SystemClock;
-import android.support.annotation.NonNull;
-import android.support.design.widget.Snackbar;
-import android.support.v4.view.MenuItemCompat;
-import android.support.v7.app.ActionBar;
-import android.support.v7.widget.SearchView;
+import androidx.annotation.NonNull;
+import com.google.android.material.snackbar.Snackbar;
+import androidx.appcompat.app.ActionBar;
+import androidx.appcompat.widget.SearchView;
 import android.text.TextUtils;
 import android.util.TypedValue;
 import android.view.LayoutInflater;
@@ -103,6 +101,7 @@ public class CardBrowser extends NavigationDrawerActivity implements
     private MenuItem mSearchItem;
     private MenuItem mSaveSearchItem;
     private MenuItem mMySearchesItem;
+    private MenuItem mPreviewItem;
 
     private Snackbar mUndoSnackbar;
 
@@ -228,7 +227,7 @@ public class CardBrowser extends NavigationDrawerActivity implements
                 mSearchTerms = savedFiltersObj.optString(searchName);
                 Timber.d("OnSelection using search terms: %s", mSearchTerms);
                 mSearchView.setQuery(mSearchTerms, false);
-                MenuItemCompat.expandActionView(mSearchItem);
+                mSearchItem.expandActionView();
                 searchCards();
             }
         }
@@ -509,9 +508,6 @@ public class CardBrowser extends NavigationDrawerActivity implements
 
         getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_HIDDEN);
 
-        // initialize mSearchTerms to a default value
-        mSearchTerms = "";
-
         // set the currently selected deck
         selectDropDownItem(getDeckPositionFromDeckId(getIntent().getLongExtra("defaultDeckId", -1)));
     }
@@ -567,6 +563,7 @@ public class CardBrowser extends NavigationDrawerActivity implements
 
     @Override
     public boolean onCreateOptionsMenu(final Menu menu) {
+        Timber.d("onCreateOptionsMenu()");
         mActionBarMenu = menu;
         if (!mInMultiSelectMode) {
             // restore drawer click listener and icon
@@ -578,7 +575,7 @@ public class CardBrowser extends NavigationDrawerActivity implements
             JSONObject savedFiltersObj = getCol().getConf().optJSONObject("savedFilters");
             mMySearchesItem.setVisible(savedFiltersObj != null && savedFiltersObj.length() > 0);
             mSearchItem = menu.findItem(R.id.action_search);
-            MenuItemCompat.setOnActionExpandListener(mSearchItem, new MenuItemCompat.OnActionExpandListener() {
+            mSearchItem.setOnActionExpandListener(new MenuItem.OnActionExpandListener() {
                 @Override
                 public boolean onMenuItemActionExpand(MenuItem item) {
                     return true;
@@ -595,7 +592,7 @@ public class CardBrowser extends NavigationDrawerActivity implements
                     return true;
                 }
             });
-            mSearchView = (SearchView) MenuItemCompat.getActionView(mSearchItem);
+            mSearchView = (SearchView) mSearchItem.getActionView();
             mSearchView.setOnQueryTextListener(new SearchView.OnQueryTextListener() {
                 @Override
                 public boolean onQueryTextChange(String newText) {
@@ -603,11 +600,9 @@ public class CardBrowser extends NavigationDrawerActivity implements
                     return true;
                 }
 
-                @SuppressLint("RestrictedApi")
                 @Override
                 public boolean onQueryTextSubmit(String query) {
                     onSearch();
-                    //noinspection RestrictedApi
                     mSearchView.clearFocus();
                     return true;
                 }
@@ -641,9 +636,12 @@ public class CardBrowser extends NavigationDrawerActivity implements
             if (search != null && search.length() != 0) {
                 Timber.d("CardBrowser :: Called with search intent: %s", search.toString());
                 mSearchView.setQuery(search, true);
+                intent.setAction(Intent.ACTION_DEFAULT);
             }
         }
 
+        mPreviewItem = menu.findItem(R.id.action_preview);
+        updatePreviewMenuItem();
         return super.onCreateOptionsMenu(menu);
     }
 
@@ -654,6 +652,13 @@ public class CardBrowser extends NavigationDrawerActivity implements
         } else {
             super.onNavigationPressed();
         }
+    }
+
+    private void updatePreviewMenuItem() {
+        if (mPreviewItem == null) {
+            return;
+        }
+        mPreviewItem.setVisible(getCards().size() > 0);
     }
 
     private void updateMultiselectMenu() {
@@ -936,11 +941,32 @@ public class CardBrowser extends NavigationDrawerActivity implements
         searchCards();
     }
 
+    @Override
+    public void onSaveInstanceState(Bundle savedInstanceState) {
+        // Save current search terms
+        savedInstanceState.putString("mSearchTerms", mSearchTerms);
+        super.onSaveInstanceState(savedInstanceState);
+    }
+
+    @Override
+    public void onRestoreInstanceState(Bundle savedInstanceState) {
+        super.onRestoreInstanceState(savedInstanceState);
+        mSearchTerms = savedInstanceState.getString("mSearchTerms");
+        searchCards();
+    }
+
     private void searchCards() {
         // cancel the previous search & render tasks if still running
         DeckTask.cancelTask(DeckTask.TASK_TYPE_SEARCH_CARDS);
         DeckTask.cancelTask(DeckTask.TASK_TYPE_RENDER_BROWSER_QA);
         String searchText;
+        if (mSearchTerms == null) {
+            mSearchTerms = "";
+        }
+        if (!"".equals(mSearchTerms) && (mSearchView != null)) {
+            mSearchView.setQuery(mSearchTerms, false);
+            mSearchItem.expandActionView();
+        }
         if (mSearchTerms.contains("deck:")) {
             searchText = mSearchTerms;
         } else {
@@ -963,6 +989,7 @@ public class CardBrowser extends NavigationDrawerActivity implements
     private void updateList() {
         mCardsAdapter.notifyDataSetChanged();
         mDropDownAdapter.notifyDataSetChanged();
+        updatePreviewMenuItem();
     }
 
     /**
@@ -1328,6 +1355,7 @@ public class CardBrowser extends NavigationDrawerActivity implements
                 searchCards();
                 endMultiSelectMode();
                 mCardsAdapter.notifyDataSetChanged();
+                updatePreviewMenuItem();
                 invalidateOptionsMenu();    // maybe the availability of undo changed
             } else {
                 closeCardBrowser(DeckPicker.RESULT_DB_ERROR);
@@ -1359,12 +1387,13 @@ public class CardBrowser extends NavigationDrawerActivity implements
         @Override
         public void onPostExecute(TaskData result) {
             if (result != null && mCards != null) {
-                Timber.i("CardBrowser:: Completed doInBackgroundSearchCards Successfuly");
+                Timber.i("CardBrowser:: Completed doInBackgroundSearchCards Successfully");
                 updateList();
-                if (!mSearchView.isIconified()) {
+                if ((mSearchView != null) && !mSearchView.isIconified()) {
                     UIUtils.showSimpleSnackbar(CardBrowser.this, getSubtitleText(), true);
                 }
             }
+            updatePreviewMenuItem();
             hideProgressBar();
         }
 
@@ -1448,6 +1477,7 @@ public class CardBrowser extends NavigationDrawerActivity implements
 
         @Override
         public void onCancelled() {
+            // do nothing
         }
     };
 
@@ -1525,7 +1555,7 @@ public class CardBrowser extends NavigationDrawerActivity implements
             mToIds = to;
             mColorFlagKey = colorFlagKey;
             mFontSizeScalePcent = fontSizeScalePcent;
-            if (!customFont.equals("")) {
+            if (!"".equals(customFont)) {
                 mCustomTypeface = AnkiFont.getTypeface(context, customFont);
             }
             mInflater = (LayoutInflater) context.getSystemService(Context.LAYOUT_INFLATER_SERVICE);

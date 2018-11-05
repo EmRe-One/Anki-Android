@@ -5,11 +5,11 @@ def artifactId = "api"
 def version = "1.1.0alpha6"
 
 android {
-    compileSdkVersion 26
+    compileSdkVersion 28
 
     defaultConfig {
         minSdkVersion 8
-        targetSdkVersion 25
+        targetSdkVersion 28
         versionCode 11016   // 4th digit: 1=alpha, 2=beta, 3=official
         versionName version
     }
@@ -19,10 +19,17 @@ android {
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
     }
+    testOptions {
+        unitTests {
+            includeAndroidResources = true
+        }
+    }
 }
 
 dependencies {
     api fileTree(dir: 'libs', include: ['*.jar'])
+    testImplementation 'org.junit.vintage:junit-vintage-engine:5.3.1'
+    testImplementation "org.robolectric:robolectric:4.0.1"
 }
 
 // Borrowed from here:
@@ -41,6 +48,11 @@ task androidJavadocs(type: Javadoc) {
     if(JavaVersion.current() >= JavaVersion.VERSION_1_10){
         options.addBooleanOption('html5', true)
     }
+}
+
+// Deprecation is an error. Use @SuppressWarnings("deprecation") and justify in the PR if you must
+tasks.withType(JavaCompile) {
+    options.compilerArgs << "-Xlint:deprecation" << "-Xmaxwarns" << "1000" << "-Werror"
 }
 
 task androidJavadocsJar(type: Jar, dependsOn: androidJavadocs) {

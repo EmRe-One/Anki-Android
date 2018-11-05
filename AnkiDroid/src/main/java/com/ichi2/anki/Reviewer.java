@@ -18,24 +18,22 @@
 
 package com.ichi2.anki;
 
-import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
-import android.content.res.Resources;
 import android.graphics.drawable.Drawable;
 import android.os.Build;
 import android.os.Bundle;
-import android.support.v4.content.ContextCompat;
-import android.support.v4.view.ActionProvider;
-import android.support.v4.view.MenuItemCompat;
+import androidx.core.content.ContextCompat;
+import androidx.core.view.ActionProvider;
+import androidx.core.view.MenuItemCompat;
 import android.view.KeyEvent;
 import android.view.Menu;
 import android.view.MenuItem;
-import android.view.MotionEvent;
 import android.view.SubMenu;
 import android.view.View;
+import android.view.ViewGroup;
 import android.widget.FrameLayout;
 
 import com.ichi2.anim.ActivityTransitionAnimation;
@@ -44,14 +42,12 @@ import com.ichi2.compat.CompatHelper;
 import com.ichi2.libanki.Card;
 import com.ichi2.libanki.Collection;
 import com.ichi2.libanki.Collection.DismissType;
-import com.ichi2.libanki.Sched;
 import com.ichi2.themes.Themes;
 import com.ichi2.widget.WidgetStatus;
 
 import org.json.JSONException;
 
 import java.lang.ref.WeakReference;
-import java.text.MessageFormat;
 import java.util.List;
 
 import timber.log.Timber;
@@ -67,18 +63,22 @@ public class Reviewer extends AbstractFlashcardViewer {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         Timber.d("onCreate()");
+        super.onCreate(savedInstanceState);
 
         if (Intent.ACTION_VIEW.equals(getIntent().getAction())) {
             Timber.d("onCreate() :: received Intent with action = %s", getIntent().getAction());
             selectDeckFromExtra();
         }
 
-        super.onCreate(savedInstanceState);
+        startLoadingCollection();
     }
 
     private void selectDeckFromExtra() {
         Bundle extras = getIntent().getExtras();
-        long did = extras.getLong("deckId", Long.MIN_VALUE);
+        long did = Long.MIN_VALUE;
+        if (extras != null) {
+            did = extras.getLong("deckId", Long.MIN_VALUE);
+        }
 
         if(did == Long.MIN_VALUE) {
             // deckId is not set, load default
@@ -273,7 +273,7 @@ public class Reviewer extends AbstractFlashcardViewer {
     private void setCustomButtons(Menu menu) {
         for(int itemId : mCustomButtons.keySet()) {
             if(mCustomButtons.get(itemId) != MENU_DISABLED) {
-                MenuItemCompat.setShowAsAction(menu.findItem(itemId), mCustomButtons.get(itemId));
+                menu.findItem(itemId).setShowAsAction(mCustomButtons.get(itemId));
             }
             else {
                 menu.findItem(itemId).setVisible(false);
@@ -282,12 +282,10 @@ public class Reviewer extends AbstractFlashcardViewer {
     }
 
 
-    @SuppressLint("NewApi")
     @Override
     public boolean onCreateOptionsMenu(Menu menu) {
         // NOTE: This is called every time a new question is shown via invalidate options menu
         getMenuInflater().inflate(R.menu.reviewer, menu);
-        Resources res = getResources();
         setCustomButtons(menu);
         if (mCurrentCard != null && mCurrentCard.note().hasTag("marked")) {
             menu.findItem(R.id.action_mark_card).setTitle(R.string.menu_unmark_note).setIcon(R.drawable.ic_star_white_24dp);
@@ -492,21 +490,19 @@ public class Reviewer extends AbstractFlashcardViewer {
     private void createWhiteboard() {
         mWhiteboard = new Whiteboard(this, mNightMode, mBlackWhiteboard);
         FrameLayout.LayoutParams lp2 = new FrameLayout.LayoutParams(
-                android.view.ViewGroup.LayoutParams.FILL_PARENT, android.view.ViewGroup.LayoutParams.FILL_PARENT);
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT);
         mWhiteboard.setLayoutParams(lp2);
-        FrameLayout fl = (FrameLayout) findViewById(R.id.whiteboard);
+        FrameLayout fl = findViewById(R.id.whiteboard);
         fl.addView(mWhiteboard);
 
-        mWhiteboard.setOnTouchListener(new View.OnTouchListener() {
-            @Override
-            public boolean onTouch(View v, MotionEvent event) {
-                if (!mShowWhiteboard || (mPrefFullscreenReview
-                        && CompatHelper.getCompat().isImmersiveSystemUiVisible(Reviewer.this))) {
-                    // Bypass whiteboard listener when it's hidden or fullscreen immersive mode is temporarily suspended
-                    return getGestureDetector().onTouchEvent(event);
-                }
-                return mWhiteboard.handleTouchEvent(event);
+        mWhiteboard.setOnTouchListener((v, event) -> {
+            if (!mShowWhiteboard || (mPrefFullscreenReview
+                    && CompatHelper.getCompat().isImmersiveSystemUiVisible(Reviewer.this))) {
+                // Bypass whiteboard listener when it's hidden or fullscreen immersive mode is temporarily suspended
+                v.performClick();
+                return getGestureDetector().onTouchEvent(event);
             }
+            return mWhiteboard.handleTouchEvent(event);
         });
         mWhiteboard.setEnabled(true);
     }

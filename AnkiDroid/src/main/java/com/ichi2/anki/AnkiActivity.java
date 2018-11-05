@@ -1,7 +1,7 @@
 
 package com.ichi2.anki;
 
-import android.annotation.SuppressLint;
+import android.app.Activity;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.content.Context;
@@ -11,15 +11,13 @@ import android.graphics.Color;
 import android.media.AudioManager;
 import android.net.Uri;
 import android.os.Bundle;
-import android.support.v4.app.DialogFragment;
-import android.support.v4.app.Fragment;
-import android.support.v4.app.FragmentManager;
-import android.support.v4.app.FragmentTransaction;
-import android.support.v4.app.LoaderManager;
-import android.support.v4.app.NotificationCompat;
-import android.support.v4.content.ContextCompat;
-import android.support.v4.content.Loader;
-import android.support.v7.app.AppCompatActivity;
+import androidx.fragment.app.DialogFragment;
+import androidx.fragment.app.Fragment;
+import androidx.fragment.app.FragmentManager;
+import androidx.fragment.app.FragmentTransaction;
+import androidx.core.app.NotificationCompat;
+import androidx.core.content.ContextCompat;
+import androidx.appcompat.app.AppCompatActivity;
 import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewGroup.LayoutParams;
@@ -27,6 +25,7 @@ import android.view.animation.Animation;
 import android.widget.ProgressBar;
 
 import com.ichi2.anim.ActivityTransitionAnimation;
+import com.ichi2.anki.analytics.UsageAnalytics;
 import com.ichi2.anki.dialogs.AsyncDialogFragment;
 import com.ichi2.anki.dialogs.DialogHandler;
 import com.ichi2.anki.dialogs.SimpleMessageDialog;
@@ -38,8 +37,7 @@ import com.ichi2.themes.Themes;
 
 import timber.log.Timber;
 
-public class AnkiActivity extends AppCompatActivity implements LoaderManager.LoaderCallbacks<Collection>,
-        SimpleMessageDialog.SimpleMessageDialogListener {
+public class AnkiActivity extends AppCompatActivity implements SimpleMessageDialog.SimpleMessageDialogListener {
 
     public final int SIMPLE_NOTIFICATION_ID = 0;
     public static final int REQUEST_REVIEW = 901;
@@ -76,6 +74,7 @@ public class AnkiActivity extends AppCompatActivity implements LoaderManager.Loa
     @Override
     protected void onResume() {
         super.onResume();
+        UsageAnalytics.sendAnalyticsScreenView(this);
         ((NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE)).cancel(SIMPLE_NOTIFICATION_ID);
         // Show any pending dialogs which were stored persistently
         mHandler.readMessage();
@@ -97,6 +96,7 @@ public class AnkiActivity extends AppCompatActivity implements LoaderManager.Loa
 
     // called when the CollectionLoader finishes... usually will be over-ridden
     protected void onCollectionLoaded(Collection col) {
+        hideProgressBar();
     }
 
 
@@ -221,6 +221,12 @@ public class AnkiActivity extends AppCompatActivity implements LoaderManager.Loa
         }
     }
 
+    /** Finish Activity using FADE animation **/
+    public static void finishActivityWithFade(Activity activity) {
+        activity.finish();
+        ActivityTransitionAnimation.slide(activity, ActivityTransitionAnimation.UP);
+    }
+
 
     private void disableIntentAnimation(Intent intent) {
         intent.addFlags(Intent.FLAG_ACTIVITY_NO_ANIMATION);
@@ -250,48 +256,24 @@ public class AnkiActivity extends AppCompatActivity implements LoaderManager.Loa
 
     // Method for loading the collection which is inherited by all AnkiActivitys
     public void startLoadingCollection() {
-        // Initialize the open collection loader
         Timber.d("AnkiActivity.startLoadingCollection()");
-        if (!colIsOpen()) {
-            showProgressBar();
+        if (colIsOpen()) {
+            onCollectionLoaded(getCol());
+            return;
         }
-        getSupportLoaderManager().restartLoader(0, null, this);
+        // Open collection asynchronously if it hasn't already been opened
+        showProgressBar();
+        CollectionLoader.load(this, col -> {
+            if (col != null) {
+                onCollectionLoaded(col);
+            } else {
+                Intent deckPicker = new Intent(this, DeckPicker.class);
+                deckPicker.putExtra("collectionLoadError", true); // don't currently do anything with this
+                deckPicker.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_NEW_TASK);
+                startActivityWithAnimation(deckPicker, ActivityTransitionAnimation.LEFT);
+            }
+        });
     }
-
-
-    // Kick user back to DeckPicker on collection load error unless this method is overridden
-    protected void onCollectionLoadError() {
-        Intent deckPicker = new Intent(this, DeckPicker.class);
-        deckPicker.putExtra("collectionLoadError", true); // don't currently do anything with this
-        deckPicker.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_NEW_TASK);
-        startActivityWithAnimation(deckPicker, ActivityTransitionAnimation.LEFT);
-    }
-
-
-    // CollectionLoader Listener callbacks
-    @Override
-    public Loader<Collection> onCreateLoader(int id, Bundle args) {
-        // Currently only using one loader, so ignore id
-        return new CollectionLoader(this);
-    }
-
-
-    @Override
-    public void onLoadFinished(Loader<Collection> loader, Collection col) {
-        hideProgressBar();
-        if (col != null && colIsOpen()) {
-            onCollectionLoaded(col);
-        } else {
-            onCollectionLoadError();
-        }
-    }
-
-
-    @Override
-    public void onLoaderReset(Loader<Collection> arg0) {
-        // We don't currently retain any references, so no need to free any data here
-    }
-
 
     public void showProgressBar() {
         ProgressBar progressBar = (ProgressBar) findViewById(R.id.progress_bar);
@@ -477,7 +459,6 @@ public class AnkiActivity extends AppCompatActivity implements LoaderManager.Loa
 
 
     // Restart the activity
-    @SuppressLint("NewApi")
     public void restartActivity() {
         Timber.i("AnkiActivity -- restartActivity()");
         Intent intent = new Intent();

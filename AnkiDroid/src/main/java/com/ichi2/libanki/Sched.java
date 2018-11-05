@@ -52,6 +52,9 @@ import java.util.Random;
 
 import timber.log.Timber;
 
+@SuppressWarnings({"PMD.ExcessiveClassLength", "PMD.AvoidThrowingRawExceptionTypes","PMD.AvoidReassigningParameters",
+                    "PMD.NPathComplexity","PMD.MethodNamingConventions","PMD.AvoidBranchingStatementAsLastInLoop",
+                    "PMD.SwitchStmtsShouldHaveDefault","PMD.CollapsibleIfStatements","PMD.EmptyIfStmt"})
 public class Sched {
 
 
@@ -391,6 +394,7 @@ public class Sched {
                 // if we've already seen the exact same deck name, remove the
                 // invalid duplicate and reload
                 if (lims.containsKey(deck.getString("name"))) {
+                    Timber.i("deckDueList() removing duplicate deck %s", deck.getString("name"));
                     mCol.getDecks().rem(deck.getLong("id"), false, true);
                     return deckDueList();
                 }
@@ -1511,7 +1515,7 @@ public class Sched {
         card.setIvl(_adjRevIvl(card, idealIvl));
     }
 
-
+    @SuppressWarnings("PMD.UnusedFormalParameter") // it's unused upstream as well
     private int _adjRevIvl(Card card, int idealIvl) {
         if (mSpreadRev) {
             idealIvl = _fuzzedIvl(idealIvl);
@@ -1649,6 +1653,7 @@ public class Sched {
             default:
             	// if we don't understand the term, default to due order
             	t = "c.due";
+            	break;
         }
         return t + " limit " + l;
     }
@@ -1656,7 +1661,7 @@ public class Sched {
 
     private void _moveToDyn(long did, List<Long> ids) {
         ArrayList<Object[]> data = new ArrayList<>();
-        long t = Utils.intNow();
+        //long t = Utils.intNow(); // unused variable present (and unused) upstream
         int u = mCol.usn();
         for (long c = 0; c < ids.size(); c++) {
             // start at -100000 so that reviews are all due

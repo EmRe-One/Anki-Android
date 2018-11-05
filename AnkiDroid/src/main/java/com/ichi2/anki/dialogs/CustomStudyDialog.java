@@ -20,8 +20,7 @@ import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.res.Resources;
 import android.os.Bundle;
-import android.support.annotation.NonNull;
-import android.support.v4.app.DialogFragment;
+import androidx.annotation.NonNull;
 import android.text.Editable;
 import android.text.TextUtils;
 import android.text.TextWatcher;
@@ -38,6 +37,7 @@ import com.ichi2.anki.CollectionHelper;
 import com.ichi2.anki.DeckOptions;
 import com.ichi2.anki.R;
 import com.ichi2.anki.Reviewer;
+import com.ichi2.anki.analytics.AnalyticsDialogFragment;
 import com.ichi2.async.DeckTask;
 import com.ichi2.libanki.Collection;
 import com.ichi2.libanki.Consts;
@@ -51,7 +51,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 
-public class CustomStudyDialog extends DialogFragment {
+public class CustomStudyDialog extends AnalyticsDialogFragment {
     // Different configurations for the context menu
     public static final int CONTEXT_MENU_STANDARD = 0;
     public static final int CONTEXT_MENU_LIMITS = 1;
@@ -500,7 +500,7 @@ public class CustomStudyDialog extends DialogFragment {
     private void onLimitsExtended(boolean jumpToReviewer) {
         AnkiActivity activity = (AnkiActivity) getActivity();
         if (jumpToReviewer) {
-            activity.startActivityForResult(new Intent(activity, Reviewer.class), AnkiActivity.REQUEST_REVIEW);
+            activity.startActivityForResultWithoutAnimation(new Intent(activity, Reviewer.class), AnkiActivity.REQUEST_REVIEW);
             CollectionHelper.getInstance().getCol(activity).startTimebox();
         } else {
             ((CustomStudyListener) activity).onExtendStudyLimits();

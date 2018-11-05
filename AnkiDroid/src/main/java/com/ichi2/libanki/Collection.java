@@ -62,13 +62,16 @@ import timber.log.Timber;
 //
 // This module manages the tag cache and tags for notes.
 
+@SuppressWarnings({"PMD.ExcessiveClassLength", "PMD.AvoidThrowingRawExceptionTypes","PMD.AvoidReassigningParameters",
+        "PMD.NPathComplexity","PMD.MethodNamingConventions","PMD.AvoidBranchingStatementAsLastInLoop",
+        "PMD.SwitchStmtsShouldHaveDefault","PMD.CollapsibleIfStatements","PMD.EmptyIfStmt","PMD.ExcessiveMethodLength"})
 public class Collection {
 
     private Context mContext;
 
     private DB mDb;
     private boolean mServer;
-    private double mLastSave;
+    //private double mLastSave;
     private Media mMedia;
     private Decks mDecks;
     private Models mModels;
@@ -136,7 +139,7 @@ public class Collection {
     }
 
     public Collection(Context context, DB db, String path, boolean server) {
-        this(context, db, path, false, false);
+        this(context, db, path, server, false);
     }
 
     public Collection(Context context, DB db, String path, boolean server, boolean log) {
@@ -147,7 +150,7 @@ public class Collection {
         _openLog();
         log(path, VersionUtils.getPkgVersionName());
         mServer = server;
-        mLastSave = Utils.now();
+        //mLastSave = Utils.now(); // assigned but never accessed - only leaving in for upstream comparison
         clearUndo();
         mMedia = new Media(this, server);
         mModels = new Models(this);
@@ -306,7 +309,7 @@ public class Collection {
         }
         // undoing non review operation is handled differently in ankidroid
 //        _markOp(name);
-        mLastSave = Utils.now();
+        //mLastSave = Utils.now(); // assigned but never accessed - only leaving in for upstream comparison
     }
 
 
@@ -911,7 +914,7 @@ public class Collection {
                                            + "where c.nid = n.id and c.id in " + Utils.ids2str(cids) + " group by nid", null);
             while (cur.moveToNext()) {
                 String ords = cur.getString(0);
-                int cnt = cur.getInt(1);
+                //int cnt = cur.getInt(1);  // present but unused upstream as well
                 String flds = cur.getString(2);
                 rep.append(String.format("Empty card numbers: %s\nFields: %s\n\n", ords, flds.replace("\u001F", " / ")));
             }
@@ -974,13 +977,13 @@ public class Collection {
 
     public ArrayList<HashMap<String, String>> renderQA(int[] ids, String type) {
         String where;
-        if (type.equals("card")) {
+        if ("card".equals(type)) {
             where = "AND c.id IN " + Utils.ids2str(ids);
-        } else if (type.equals("fact")) {
+        } else if ("fact".equals(type)) {
             where = "AND f.id IN " + Utils.ids2str(ids);
-        } else if (type.equals("model")) {
+        } else if ("model".equals(type)) {
             where = "AND m.id IN " + Utils.ids2str(ids);
-        } else if (type.equals("all")) {
+        } else if ("all".equals(type)) {
             where = "";
         } else {
             throw new RuntimeException();
@@ -1034,7 +1037,7 @@ public class Collection {
             for (Pair<String, String> p : new Pair[]{new Pair<>("q", qfmt), new Pair<>("a", afmt)}) {
                 String type = p.first;
                 String format = p.second;
-                if (type.equals("q")) {
+                if ("q".equals(type)) {
                     format = fClozePatternQ.matcher(format).replaceAll(String.format(Locale.US, "{{$1cq-%d:", cardNum));
                     format = fClozeTagStart.matcher(format).replaceAll(String.format(Locale.US, "<%%cq:%d:", cardNum));
                 } else {
@@ -1047,10 +1050,10 @@ public class Collection {
                 String html = new Template(format, fields).render();
                 d.put(type, (String) Hooks.runFilter("mungeQA", html, type, fields, model, data, this));
                 // empty cloze?
-                if (type.equals("q") && model.getInt("type") == Consts.MODEL_CLOZE) {
+                if ("q".equals(type) && model.getInt("type") == Consts.MODEL_CLOZE) {
                     if (getModels()._availClozeOrds(model, (String) data[6], false).size() == 0) {
                         String link = String.format("<a href=%s#cloze>%s</a>", Consts.HELP_SITE, "help");
-                        d.put("q", String.format("Please edit this note and add some cloze deletions. (%s)", link));
+                        d.put("q", mContext.getString(R.string.empty_cloze_warning, link));
                     }
                 }
             }
@@ -1468,7 +1471,7 @@ public class Collection {
             mDb.getDatabase().beginTransaction();
             try {
                 save();
-                if (!mDb.queryString("PRAGMA integrity_check").equals("ok")) {
+                if (!"ok".equals(mDb.queryString("PRAGMA integrity_check"))) {
                     return -1;
                 }
                 // note types with a missing model
@@ -1600,7 +1603,7 @@ public class Collection {
         if (problems.size() > 0) {
             modSchemaNoCheck();
         }
-        // TODO: report problems
+        logProblems(problems);
         return (oldSize - newSize) / 1024;
     }
 
@@ -1617,6 +1620,27 @@ public class Collection {
      * Logging
      * ***********************************************************
      */
+
+    /**
+     * Track database corruption problems - AcraLimiter should quench it if it's a torrent
+     * but we will take care to limit possible data usage by limiting count we send regardless
+     *
+     * @param integrityCheckProblems list of problems, the first 10 will be logged and sent via ACRA
+     */
+    private void logProblems(ArrayList integrityCheckProblems) {
+
+        if (integrityCheckProblems.size() > 0) {
+            StringBuffer additionalInfo = new StringBuffer();
+            for (int i = 0; ((i < 10) && (integrityCheckProblems.size() > i)); i++) {
+                additionalInfo.append(integrityCheckProblems.get(i)).append("\n");
+            }
+            AnkiDroidApp.sendExceptionReport(
+                    new Exception("Problem list (limited to first 10)"), "Collection.fixIntegrity()", additionalInfo.toString());
+            Timber.i("fixIntegrity() Problem list (limited to first 10):\n%s", additionalInfo);
+        } else {
+            Timber.i("fixIntegrity() no problems found");
+        }
+    }
 
     public void log(Object... args) {
         if (!mDebugLog) {

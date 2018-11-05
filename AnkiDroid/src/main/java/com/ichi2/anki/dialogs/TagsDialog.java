@@ -3,13 +3,11 @@ package com.ichi2.anki.dialogs;
 import android.app.Dialog;
 import android.content.res.Resources;
 import android.os.Bundle;
-import android.support.annotation.NonNull;
-import android.support.v4.app.DialogFragment;
-import android.support.v4.view.MenuItemCompat;
-import android.support.v7.widget.LinearLayoutManager;
-import android.support.v7.widget.RecyclerView;
-import android.support.v7.widget.SearchView;
-import android.support.v7.widget.Toolbar;
+import androidx.annotation.NonNull;
+import androidx.recyclerview.widget.LinearLayoutManager;
+import androidx.recyclerview.widget.RecyclerView;
+import androidx.appcompat.widget.SearchView;
+import androidx.appcompat.widget.Toolbar;
 import android.text.InputFilter;
 import android.text.InputType;
 import android.text.TextUtils;
@@ -28,18 +26,19 @@ import android.widget.TextView;
 import com.afollestad.materialdialogs.MaterialDialog;
 import com.ichi2.anki.R;
 import com.ichi2.anki.UIUtils;
+import com.ichi2.anki.analytics.AnalyticsDialogFragment;
 
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.TreeSet;
 
-public class TagsDialog extends DialogFragment {
+public class TagsDialog extends AnalyticsDialogFragment {
     public interface TagsDialogListener {
         void onPositive(List<String> selectedTags, int option);
     }
 
-    public static final int TYPE_NONE = -1;
+    private static final int TYPE_NONE = -1;
     public static final int TYPE_ADD_TAG = 0;
     public static final int TYPE_FILTER_BY_TAG = 1;
     public static final int TYPE_CUSTOM_STUDY_TAGS = 2;
@@ -175,7 +174,7 @@ public class TagsDialog extends DialogFragment {
         MenuItem mToolbarAddItem = mToolbar.getMenu().findItem(R.id.tags_dialog_action_add);
         mToolbarAddItem.setOnMenuItemClickListener(menuItem -> {
             String query = mToolbarSearchView.getQuery().toString();
-            if (MenuItemCompat.isActionViewExpanded(mToolbarSearchItem) && !TextUtils.isEmpty(query)) {
+            if (mToolbarSearchItem.isActionViewExpanded() && !TextUtils.isEmpty(query)) {
                 addTag(query);
                 mToolbarSearchView.setQuery("", true);
             } else {
@@ -194,7 +193,7 @@ public class TagsDialog extends DialogFragment {
         });
 
         mToolbarSearchItem = mToolbar.getMenu().findItem(R.id.tags_dialog_action_filter);
-        mToolbarSearchView = (SearchView) MenuItemCompat.getActionView(mToolbarSearchItem);
+        mToolbarSearchView = (SearchView) mToolbarSearchItem.getActionView();
 
         EditText queryET = mToolbarSearchView.findViewById(R.id.search_src_text);
         queryET.setFilters(new InputFilter[]{addTagFilter});

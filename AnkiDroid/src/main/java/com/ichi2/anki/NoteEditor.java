@@ -26,10 +26,9 @@ import android.content.SharedPreferences;
 import android.content.res.Resources;
 import android.graphics.Typeface;
 import android.os.Bundle;
-import android.support.v7.widget.PopupMenu;
-import android.support.v7.widget.Toolbar;
+import androidx.appcompat.widget.PopupMenu;
+import androidx.appcompat.widget.Toolbar;
 import android.text.Editable;
-import android.text.Html;
 import android.text.TextUtils;
 import android.text.TextWatcher;
 
@@ -67,6 +66,7 @@ import com.ichi2.anki.multimediacard.impl.MultimediaEditableNote;
 import com.ichi2.anki.receiver.SdCardReceiver;
 import com.ichi2.anki.servicelayer.NoteService;
 import com.ichi2.async.DeckTask;
+import com.ichi2.compat.CompatHelper;
 import com.ichi2.libanki.Card;
 import com.ichi2.libanki.Collection;
 import com.ichi2.libanki.Note;
@@ -332,7 +332,7 @@ public class NoteEditor extends AnkiActivity {
         this.getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_HIDDEN);
 
         Intent intent = getIntent();
-        Timber.d("onCollectionLoaded: caller: %d", mCaller);
+        Timber.d("NoteEditor() onCollectionLoaded: caller: %d", mCaller);
 
         registerExternalStorageListener();
 
@@ -532,7 +532,7 @@ public class NoteEditor extends AnkiActivity {
         });
 
         if (!mAddNote && mCurrentEditedCard != null) {
-            Timber.i("NoteEditor:: Edit note activity successfully started with card id %d", mCurrentEditedCard.getId());
+            Timber.i("onCollectionLoaded() Edit note activity successfully started with card id %d", mCurrentEditedCard.getId());
         }
 
         //set focus to FieldEditText 'first' on startup like Anki desktop
@@ -690,10 +690,7 @@ public class NoteEditor extends AnkiActivity {
             return true;
         }
         // changed tags?
-        if (mTagsEdited) {
-            return true;
-        }
-        return false;
+        return mTagsEdited;
     }
 
 
@@ -1067,12 +1064,14 @@ public class NoteEditor extends AnkiActivity {
         // Pass the model ID
         try {
             intent.putExtra("modelId", getCurrentlySelectedModel().getLong("id"));
+            Timber.d("showCardTemplateEditor() for model %s", intent.getLongExtra("modelId", -1L));
         } catch (JSONException e) {
            throw new RuntimeException(e);
         }
         // Also pass the card ID if not adding new note
         if (!mAddNote) {
             intent.putExtra("noteId", mCurrentEditedCard.note().getId());
+            Timber.d("showCardTemplateEditor() with note %s", mCurrentEditedCard.note().getId());
         }
         startActivityForResultWithAnimation(intent, REQUEST_TEMPLATE_EDIT, ActivityTransitionAnimation.LEFT);
     }
@@ -1080,6 +1079,7 @@ public class NoteEditor extends AnkiActivity {
 
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        Timber.d("onActivityResult() with request/result: %s/%s", requestCode, resultCode);
         super.onActivityResult(requestCode, resultCode, data);
 
         if (resultCode == DeckPicker.RESULT_DB_ERROR) {
@@ -1126,6 +1126,9 @@ public class NoteEditor extends AnkiActivity {
                 if (resultCode == RESULT_OK) {
                     mReloadRequired = true;
                 }
+                // rebuild the model post-template-edit so we get the correct number of cards
+                Timber.d("onActivityResult() template edit - reloading model");
+                mEditorNote.reloadModel();
                 updateCards(mEditorNote.model());
                 break;
             }
@@ -1480,10 +1483,12 @@ public class NoteEditor extends AnkiActivity {
 
     /** Update the list of card templates for current note type */
     private void updateCards(JSONObject model) {
+        Timber.d("updateCards()");
         try {
             JSONArray tmpls = model.getJSONArray("tmpls");
             String cardsList = "";
             // Build comma separated list of card names
+            Timber.d("updateCards() template count is %s", tmpls.length());
             for (int i = 0; i < tmpls.length(); i++) {
                 String name = tmpls.getJSONObject(i).optString("name");
                 // If more than one card then make currently selected card underlined
@@ -1500,7 +1505,7 @@ public class NoteEditor extends AnkiActivity {
             if (!mAddNote && tmpls.length() < mEditorNote.model().getJSONArray("tmpls").length()) {
                 cardsList = "<font color='red'>" + cardsList + "</font>";
             }
-            mCardsButton.setText(Html.fromHtml(getResources().getString(R.string.CardEditorCards, cardsList)));
+            mCardsButton.setText(CompatHelper.getCompat().fromHtml(getResources().getString(R.string.CardEditorCards, cardsList)));
         } catch (JSONException e) {
             throw new RuntimeException(e);
         }
